@@ -57,7 +57,7 @@ jobs:
           draft: false
           prerelease: false
           body: |
-            Automated release created by GitHub Actions. 
+            Automated release created by GitHub Actions.
             Commit: ${{ github.sha }}
             Ref: ${{ github.ref }}
         env:
