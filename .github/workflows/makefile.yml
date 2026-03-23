@@ -1,4 +1,5 @@
 name: Publish ISO to Release
+
 on:
   push:
     branches: [ "main" ]
@@ -6,57 +7,95 @@ on:
       - 'v*'
   pull_request:
     branches: [ "main" ]
+
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Install build dependencies
+
+      - name: Install build dependencies (multilib + tools)
         run: |
           set -eux
           sudo apt-get update
-          # install cross-compiler toolchain and tools used by your Makefile
+
+          # Install multilib toolchain and tools; avoid gcc-i686-linux-gnu which is unavailable
           sudo apt-get install -y \
-            gcc-multilib \
-            gcc-i686-linux-gnu \
-            binutils-i686-linux-gnu \
-            lld \
             build-essential \
+            gcc-multilib \
             libc6-dev-i386 \
+            binutils \
+            lld \
             grub-pc-bin \
             xorriso
-          echo "=== tool versions ==="
-          i686-linux-gnu-gcc --version || true
-          i686-linux-gnu-ld --version || true
+
+          echo "=== Versions ==="
+          gcc --version
+          ld --version || true
           ld.lld --version || true
-          grub-mkrescue --version || true
-          xorriso --version || true
+          grub-mkrescue --version
+          xorriso --version
+
+      - name: Provide i686-linux-gnu-* wrappers (so Makefile PREFIX works)
+        run: |
+          set -eux
+          # create wrappers in /usr/local/bin so they are in PATH before /usr/bin
+          cat <<'EOF' | sudo tee /usr/local/bin/i686-linux-gnu-gcc > /dev/null
+          #!/usr/bin/env bash
+          # Wrapper: call host gcc with -m32 and forward args
+          exec /usr/bin/gcc -m32 "$@"
+          EOF
+          sudo chmod +x /usr/local/bin/i686-linux-gnu-gcc
+
+          cat <<'EOF' | sudo tee /usr/local/bin/i686-linux-gnu-ld > /dev/null
+          #!/usr/bin/env bash
+          # Wrapper: call ld with elf_i386 emulation
+          exec /usr/bin/ld -m elf_i386 "$@"
+          EOF
+          sudo chmod +x /usr/local/bin/i686-linux-gnu-ld
+
+          cat <<'EOF' | sudo tee /usr/local/bin/i686-linux-gnu-ar > /dev/null
+          #!/usr/bin/env bash
+          exec /usr/bin/ar "$@"
+          EOF
+          sudo chmod +x /usr/local/bin/i686-linux-gnu-ar
+
+          # Provide i686-linux-gnu-g++ as well in case Makefile/compile uses it
+          cat <<'EOF' | sudo tee /usr/local/bin/i686-linux-gnu-g++ > /dev/null
+          #!/usr/bin/env bash
+          exec /usr/bin/g++ -m32 "$@"
+          EOF
+          sudo chmod +x /usr/local/bin/i686-linux-gnu-g++
+
+          echo "Wrappers created:"
+          ls -l /usr/local/bin/i686-linux-gnu-*
+
       - name: Prepare workspace
         run: |
           set -eux
           mkdir -p build iso
+
       - name: Build
         run: |
           set -eux
-          # Show the Makefile and print it for debugging
-          echo "=== Makefile content ==="
-          sed -n '1,200p' Makefile || true
           make clean || true
           make
+
       - name: Ensure ISO exists
         run: |
           set -eux
           if [ ! -f build/boot.iso ]; then
-            echo "build directory listing:"
+            echo "build listing:"
             ls -la build || true
-            echo "iso directory listing:"
+            echo "iso listing:"
             ls -la iso || true
-            # show output of last make (if present)
             exit 1
           fi
+
       - name: Determine release tag/name
         id: get_release
         run: |
@@ -71,6 +110,7 @@ jobs:
             echo "tag=${NAME}" >> $GITHUB_OUTPUT
             echo "is_tag=false" >> $GITHUB_OUTPUT
           fi
+
       - name: Create release
         id: create_release
         uses: actions/create-release@v1
@@ -85,6 +125,7 @@ jobs:
             Ref: ${{ github.ref }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Upload ISO to release
         uses: actions/upload-release-asset@v1
         with:
