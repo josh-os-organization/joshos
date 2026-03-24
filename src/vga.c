@@ -27,7 +27,7 @@ void putc(char c) {
     if (col >= 80) {
         col = 0; row++;
     }
-    if (row > 25) {
+    if (row >= 25) {
         row = 24;
     }
     set_cursor_pos(row, col);
