@@ -11,6 +11,7 @@ static uint8_t ctrl = 0;
 static uint8_t alt = 0;
 static uint8_t capslock = 0;
 static uint8_t ext = 0;
+static uint8_t lang = 0;
 
 static const char scancode_map_lower[] = {
 	0,    0,   '1',  '2',  '3',  '4',  '5',  '6',  '7',  '8',  '9',  '0',  '-',  '=',  0,    0,
@@ -29,6 +30,24 @@ static const char scancode_map_upper[] = {
 	'2',  '3', '0',  '.',  0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0
 };
 
+static const char rus_scancode_map_lower[] = {
+	0,    0,   '1',  '2',  '3',  '4',  '5',  '6',  '7',  '8',  '9',  '0',  '-',  '=',  0,    0,
+	'й',  'ц', 'у',  'к',  'е',  'н',  'г',  'ш',  'щ',  'з',  'х',  'ъ',  '\n', 0,    'ф',  'ы',
+	'в',  'а', 'п',  'р',  'о',  'л',  'д',  'ж',  'э', '\\',  0,    '\\', 'я',  'ч',  'с',  'м',
+	'и',  'т', 'ь',  'б',  'ю',  '.',  0,    '*',  0,    ' ',  0,    0,    0,    0,    0,    0,
+	0,    0,   0,    0,    0,    0,    0,    '7',  '8',  '9',  '-',  '4',  '5',  '6',  '+',  '1',
+	'2',  '3', '0',  '.',  0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0
+};
+static const char rus_scancode_map_upper[] = {
+	0,    0,   '!',  '"',  '№',  ';',  '%',  ':',  '?',  '*',  '(',  ')',  '_',  '+',  0,    0,
+	'Й',  'Ц', 'У',  'К',  'Е',  'Н',  'Г',  'Ш',  'Щ',  'З',  'Х',  'Ъ',  '\n', 0,    'Ф',  'Ы',
+	'В',  'А', 'П',  'Р',  'О',  'Л',  'Д',  'Ж',  'Э',  '\\',  0,    '/',  'Я',  'Ч',  'С',  'М',
+	'И',  'Т', 'Ь',  'Б',  'Ю',  '.',  0,    '*',  0,    ' ',  0,    0,    0,    0,    0,    0,
+	0,    0,   0,    0,    0,    0,    0,    '7',  '8',  '9',  '-',  '4',  '5',  '6',  '+',  '1',
+	'2',  '3', '0',  '.',  0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0
+};
+
+
 uint8_t shift_pressed() { return shift; }
 uint8_t ctrl_pressed() { return ctrl; }
 uint8_t alt_pressed() { return alt; }
@@ -36,6 +55,7 @@ uint8_t alt_pressed() { return alt; }
 void kb_init() {
 	outb(0x64, 0xAE);
 	shift = 0; ctrl = 0; alt = 0; capslock = 0;
+	lang = 0;
 	kb_flush_buf();
 }
 
@@ -66,7 +86,7 @@ char scancode_to_c(uint8_t sc) {
 	if (sc == SCANCODE_LSHIFT_RELEASE || sc == SCANCODE_RSHIFT_RELEASE) { shift = 0; return 0; }
 	if (sc == SCANCODE_CTRL_PRESS) { ctrl = 1; return 0; }
 	if (sc == SCANCODE_CTRL_RELEASE) { ctrl = 0; return 0; }
-	if (sc == SCANCODE_ALT_PRESS) { alt = 1; return 0; }
+	if (sc == SCANCODE_ALT_PRESS) { alt = 1; lang = !lang; return 0; }
 	if (sc == SCANCODE_ALT_RELEASE) { alt = 0; return 0; }
 	if (sc == SCANCODE_CAPSLOCK)  { capslock = !capslock; return 0; }
 	if (sc & 0x80) return 0;
@@ -77,8 +97,13 @@ char scancode_to_c(uint8_t sc) {
 	if (sc == 0x01) return 0x1B; // escape
 	if (sc >= sizeof(scancode_map_lower)) return 0;
 	char c;
-	if (shift) { c = scancode_map_upper[sc]; }
-	else       { c = scancode_map_lower[sc]; }
+	if (lang) {
+		if (shift) { c = rus_scancode_map_upper[sc]; }
+		else       { c = rus_scancode_map_lower[sc]; }
+	} else {
+		if (shift) { c = scancode_map_upper[sc]; }
+		else       { c = scancode_map_lower[sc]; }
+	}
 	if      (capslock && c >= 'a' && c <= 'z') { c = c - 'a' + 'A'; }
 	else if (capslock && c >= 'A' && c <= 'Z' && !shift) {}
 	else if (capslock && c >= 'A' && c <= 'Z' && shift ) { c = c - 'A' + 'a'; }
